@@ -1,141 +1,175 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>MakeCode Collab</title>
     <meta charset="UTF-8">
+    <title>MakeCode Collab</title>
 
     <style>
         body {
+            margin: 0;
             font-family: Arial, sans-serif;
-            text-align: center;
             background: #111;
             color: white;
-            padding-top: 60px;
         }
 
-        button {
-            padding: 12px 25px;
-            margin: 8px;
-            font-size: 18px;
-            cursor: pointer;
+        #top {
+            padding: 15px;
+            background: #222;
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
 
-        input {
-            padding: 12px;
-            font-size: 18px;
-            width: 200px;
-            text-transform: uppercase;
+        button, input {
+            font-size: 16px;
+            padding: 10px;
+        }
+
+        #editor {
+            width: 100%;
+            height: calc(100vh - 75px);
+            box-sizing: border-box;
+            background: #181818;
+            color: white;
+            border: 0;
+            outline: none;
+            padding: 20px;
+            font-family: monospace;
+            font-size: 16px;
+            resize: none;
         }
 
         #code {
-            font-size: 35px;
             font-weight: bold;
-            margin: 25px;
         }
 
         #status {
-            margin: 20px;
+            margin-left: auto;
         }
     </style>
 </head>
 
 <body>
 
-    <h1>🎮 MakeCode Collab</h1>
-
+<div id="top">
     <button onclick="createRoom()">Create Game</button>
 
-    <br>
+    <input id="roomInput" placeholder="ROOM CODE">
 
-    <input id="roomCode" placeholder="ROOM CODE">
     <button onclick="joinRoom()">Join Game</button>
 
-    <div id="code"></div>
-    <div id="status">Not connected</div>
+    <span id="code"></span>
+    <span id="status">🔴 Not connected</span>
+</div>
 
-    <script>
-        const SERVER = "wss://makecode-collab.onrender.com";
+<textarea id="editor" placeholder="Write your MakeCode code here..."></textarea>
 
-        let socket;
+<script>
+    const SERVER = "wss://makecode-collab.onrender.com";
 
-        function connect() {
-            socket = new WebSocket(SERVER);
+    let socket = null;
+    let room = null;
+    let updatingFromServer = false;
 
-            socket.onopen = () => {
-                document.getElementById("status").textContent =
-                    "🟢 Connected to server";
-            };
+    function connect() {
+        socket = new WebSocket(SERVER);
 
-            socket.onclose = () => {
-                document.getElementById("status").textContent =
-                    "🔴 Disconnected";
-            };
+        socket.onopen = () => {
+            document.getElementById("status").textContent =
+                "🟢 Connected";
+        };
 
-            socket.onmessage = (event) => {
-                const message = JSON.parse(event.data);
+        socket.onclose = () => {
+            document.getElementById("status").textContent =
+                "🔴 Disconnected";
+        };
 
-                if (message.type === "created") {
-                    document.getElementById("code").textContent =
-                        "ROOM CODE: " + message.code;
-                }
+        socket.onmessage = (event) => {
+            const message = JSON.parse(event.data);
 
-                if (message.type === "playerJoined") {
-                    document.getElementById("status").textContent =
-                        "🟢 Friend joined!";
-                }
+            if (message.type === "created") {
+                room = message.code;
 
-                if (message.type === "error") {
-                    alert(message.message);
-                }
-            };
-        }
-
-        function createRoom() {
-            if (!socket || socket.readyState !== WebSocket.OPEN) {
-                connect();
-
-                setTimeout(() => {
-                    socket.send(JSON.stringify({
-                        type: "create"
-                    }));
-                }, 500);
-
-                return;
+                document.getElementById("code").textContent =
+                    "Room: " + room;
             }
 
+            if (message.type === "playerJoined") {
+                document.getElementById("status").textContent =
+                    "🟢 Friend connected!";
+            }
+
+            if (message.type === "change") {
+                updatingFromServer = true;
+
+                document.getElementById("editor").value =
+                    message.data;
+
+                updatingFromServer = false;
+            }
+
+            if (message.type === "error") {
+                alert(message.message);
+            }
+        };
+    }
+
+    function createRoom() {
+        connectWhenReady(() => {
             socket.send(JSON.stringify({
                 type: "create"
             }));
+        });
+    }
+
+    function joinRoom() {
+        const code =
+            document.getElementById("roomInput").value
+            .trim()
+            .toUpperCase();
+
+        if (!code) {
+            alert("Enter a room code!");
+            return;
         }
 
-        function joinRoom() {
-            const code =
-                document.getElementById("roomCode").value.toUpperCase();
-
-            if (!code) {
-                alert("Enter a room code!");
-                return;
-            }
-
-            if (!socket || socket.readyState !== WebSocket.OPEN) {
-                connect();
-
-                setTimeout(() => {
-                    socket.send(JSON.stringify({
-                        type: "join",
-                        code: code
-                    }));
-                }, 500);
-
-                return;
-            }
-
+        connectWhenReady(() => {
             socket.send(JSON.stringify({
                 type: "join",
                 code: code
             }));
+
+            room = code;
+            document.getElementById("code").textContent =
+                "Room: " + code;
+        });
+    }
+
+    function connectWhenReady(action) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            action();
+            return;
         }
-    </script>
+
+        connect();
+
+        socket.addEventListener("open", action, {
+            once: true
+        });
+    }
+
+    document.getElementById("editor").addEventListener("input", () => {
+        if (updatingFromServer) return;
+
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        if (!room) return;
+
+        socket.send(JSON.stringify({
+            type: "change",
+            data: document.getElementById("editor").value
+        }));
+    });
+</script>
 
 </body>
 </html>
