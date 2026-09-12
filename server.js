@@ -1,7 +1,29 @@
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const WebSocket = require("ws");
 
-const server = http.createServer();
+const PORT = process.env.PORT || 3000;
+
+// Web page server
+const server = http.createServer((req, res) => {
+    if (req.url === "/" || req.url === "/index.html") {
+        const file = fs.readFileSync(
+            path.join(__dirname, "index.html")
+        );
+
+        res.writeHead(200, {
+            "Content-Type": "text/html"
+        });
+
+        res.end(file);
+    } else {
+        res.writeHead(404);
+        res.end("Not found");
+    }
+});
+
+// WebSocket server
 const wss = new WebSocket.Server({ server });
 
 const rooms = new Map();
@@ -29,7 +51,6 @@ wss.on("connection", socket => {
             return;
         }
 
-        // Create a room
         if (message.type === "create") {
             let code;
 
@@ -44,45 +65,41 @@ wss.on("connection", socket => {
                 type: "created",
                 code: code
             }));
-
-            return;
         }
 
-        // Join a room
         if (message.type === "join") {
-            const target = rooms.get(message.code);
+            const clients = rooms.get(message.code);
 
-            if (!target) {
+            if (!clients) {
                 socket.send(JSON.stringify({
                     type: "error",
-                    message: "Room not found"
+                    message: "Room not found!"
                 }));
                 return;
             }
 
             room = message.code;
-            target.add(socket);
+            clients.add(socket);
 
-            for (const client of target) {
+            for (const client of clients) {
                 if (client.readyState === WebSocket.OPEN) {
                     client.send(JSON.stringify({
                         type: "playerJoined"
                     }));
                 }
             }
-
-            return;
         }
 
-        // Send a change to everyone else
         if (message.type === "change" && room) {
             const clients = rooms.get(room);
 
             if (!clients) return;
 
             for (const client of clients) {
-                if (client !== socket &&
-                    client.readyState === WebSocket.OPEN) {
+                if (
+                    client !== socket &&
+                    client.readyState === WebSocket.OPEN
+                ) {
                     client.send(JSON.stringify({
                         type: "change",
                         data: message.data
@@ -107,6 +124,6 @@ wss.on("connection", socket => {
     });
 });
 
-server.listen(process.env.PORT || 3000, () => {
-    console.log("Collab server is running!");
+server.listen(PORT, () => {
+    console.log("MakeCode Collab running on port " + PORT);
 });
