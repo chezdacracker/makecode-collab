@@ -124,6 +124,9 @@ wss.on("connection", socket => {
     });
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-    console.log("MakeCode Collab running on port " + PORT);
+server.listen({
+    port: PORT,
+    host: "0.0.0.0"
+}, () => {
+    console.log(`MakeCode Collab running on ${PORT}`);
 });
