@@ -1,0 +1,11 @@
+{
+    "name": "makecode-collab",
+    "version": "0.0.1",
+    "description": "Collaborative coding extension for MakeCode Arcade",
+    "dependencies": {
+        "device": "*"
+    },
+    "files": [
+        "main.ts"
+    ]
+}
